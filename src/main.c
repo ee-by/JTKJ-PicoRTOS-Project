@@ -78,7 +78,7 @@ static void sensor_task(void *arg){
         //printf("sensorTask\n");
 
         // Do not remove this
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        vTaskDelay(pdMS_TO_TICKS(500));
     }
 }
 
@@ -87,6 +87,7 @@ static void print_task(void *arg){
     
     while(1){
         if (programState == DATA_READY) {
+            
             printf("%lu\n", ambientLight);
             programState = WAITING;
 

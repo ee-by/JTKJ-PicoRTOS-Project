@@ -558,7 +558,7 @@ uint32_t veml6030_read_light() {
         }
     }
     // Closing the I2C connection, though the infinite loop never gets here
-    i2c_deinit(i2c_default);
+    //i2c_deinit(i2c_default);
 
     // Exercise 2: In order to get the illuminance we need to read the value of the VEML6030_ALS_REG (see VEML6030 datasheet)
     //            Use functions i2c_write_blocking and i2c_read_blocking to collect illuminance data.
