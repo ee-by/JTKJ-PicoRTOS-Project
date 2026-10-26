@@ -540,13 +540,23 @@ uint32_t veml6030_read_light() {
     uint8_t rxBuffer[2];
 
 
-    while(1) {
         if(i2c_write_blocking(i2c_default, VEML6030_I2C_ADDRESS, txBuffer, 1, true) != PICO_ERROR_GENERIC) {
             if(i2c_read_blocking(i2c_default, VEML6030_I2C_ADDRESS, rxBuffer, 2, false) != PICO_ERROR_GENERIC) {                
                 // Changing the 2-byte data in rxBuffer
                 // into a temperature value (formula in exercise material)
                 //PART OF THE LAB SESSION.
-
+                    uint32_t luxVal_uncorrected = ((uint16_t)rxBuffer[0]) |((uint16_t)rxBuffer[1]<<8);
+                    
+                    if (luxVal_uncorrected>100){
+                         // Polynomial is pulled from pg 10 of the datasheet. 
+                         // See https://github.com/sparkfun/SparkFun_Ambient_Light_Sensor_Arduino_Library/blob/efde0817bd6857863067bd1653a2cfafe6c68732/src/SparkFun_VEML6030_Ambient_Light_Sensor.cpp#L409
+                        uint32_t luxVal = (.00000000000060135 * (pow(luxVal_uncorrected, 4))) - 
+                            (.0000000093924 * (pow(luxVal_uncorrected, 3))) + 
+                            (.000081488 * (pow(luxVal_uncorrected,2))) + 
+                            (1.0023 * luxVal_uncorrected);
+                        return luxVal;
+                }
+            return  luxVal_uncorrected;
                 // Temperature value to console window
             }
             else {
@@ -556,7 +566,7 @@ uint32_t veml6030_read_light() {
         else {
             printf("I2C Bus fault\n");
         }
-    }
+    
     // Closing the I2C connection, though the infinite loop never gets here
     //i2c_deinit(i2c_default);
 
@@ -580,18 +590,7 @@ uint32_t veml6030_read_light() {
     //            käyttäen VEML6030-sovellussuunnitteluasiakirjan sivun 5 tietoja:https://www.vishay.com/docs/84367/designingveml6030.pdf
     //            Lopuksi tallenna arvo muuttujaan luxVal_uncorrected.
   
-    uint32_t luxVal_uncorrected = ((uint16_t)rxBuffer[0]) |((uint16_t)rxBuffer[1]<<8);
-    printf("%u", luxVal_uncorrected);
-    if (luxVal_uncorrected>100){
-        // Polynomial is pulled from pg 10 of the datasheet. 
-        // See https://github.com/sparkfun/SparkFun_Ambient_Light_Sensor_Arduino_Library/blob/efde0817bd6857863067bd1653a2cfafe6c68732/src/SparkFun_VEML6030_Ambient_Light_Sensor.cpp#L409
-        uint32_t luxVal = (.00000000000060135 * (pow(luxVal_uncorrected, 4))) - 
-                            (.0000000093924 * (pow(luxVal_uncorrected, 3))) + 
-                            (.000081488 * (pow(luxVal_uncorrected,2))) + 
-                            (1.0023 * luxVal_uncorrected);
-        return luxVal;
-    }
-    return  luxVal_uncorrected;
+
 }
 
 

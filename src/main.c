@@ -22,7 +22,7 @@
 // Tehtävä 3: Tilakoneen esittely Add missing states.
 // Exercise 3: Definition of the state machine. Add missing states.
 enum state { WAITING=1, DATA_READY};
-enum state programState = WAITING;
+volatile enum state programState = WAITING;
 
 // Tehtävä 3: Valoisuuden globaali muuttuja
 // Exercise 3: Global variable for ambient light
