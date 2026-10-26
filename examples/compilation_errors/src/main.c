@@ -1,10 +1,13 @@
 
+#include <FreeRTOS.h>
 #include <time.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <inttypes.h>
 
 #include "pico/stdlib.h"
 #include "pico/stdio.h"
+#include <task.h>
 
 
 #define TEMP_MIN        0
@@ -71,6 +74,7 @@ static void sensorTask (void *arg){
  **/
 
 static void printTask(void *arg) {
+    char BUFFER_SIZE = 32;
     (void)arg;
 
     //Wait till someone is listening
@@ -101,8 +105,9 @@ int main (void) {
     TaskHandle_t myPrintHandle = NULL;
 
     // Create tasks
-    xTaskCreate(printingTask, "print", 1024, NULL, 3, &myPrintHandle);
+    xTaskCreate(printTask, "print", 1024, NULL, 3, &myPrintHandle);
     xTaskCreate(sensorTask, "usb", 1024, NULL, 2, &mySensorHandle);
 
     vTaskStartScheduler();
+}
 
