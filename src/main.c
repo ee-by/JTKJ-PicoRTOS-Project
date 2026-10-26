@@ -46,10 +46,13 @@ static void sensor_task(void *arg){
         // Exercise 2: Modify with application code here. Comment following line.
         //             Read sensor data and print it out as string; 
         //tight_loop_contents();
-        if progra
-        float ambientLight = veml6030_read_light();
+        if (programState == WAITING) {
+            float ambientLight = veml6030_read_light();
+            programState = DATA_READY;
+        }
+        
 
-        printf("%.2f", light);
+        printf("%.2fambient\n", ambientLight);
 
 
    
@@ -71,7 +74,7 @@ static void sensor_task(void *arg){
         
         // Exercise 2. Just for sanity check. Please, comment this out
         // Tehtävä 2: Just for sanity check. Please, comment this out
-        //printf("sensorTask\n");
+        printf("sensorTask\n");
 
         // Do not remove this
         vTaskDelay(pdMS_TO_TICKS(1000));
@@ -82,14 +85,18 @@ static void print_task(void *arg){
     (void)arg;
     
     while(1){
-        
+        if (programState = DATA_READY) {
+            printf("%u\n", ambientLight);
+            programState = WAITING;
+
+        }
         // Tehtävä 3: Kun tila on oikea, tulosta sensoridata merkkijonossa debug-ikkunaan
         //            Muista tilamuutos
         //            Älä unohda kommentoida seuraavaa koodiriviä.
         // Exercise 3: Print out sensor data as string to debug window if the state is correct
         //             Remember to modify state
         //             Do not forget to comment next line of code.
-        tight_loop_contents();
+        //tight_loop_contents();
         
 
 
@@ -119,7 +126,7 @@ static void print_task(void *arg){
         printf("printTask\n");
         
         // Do not remove this
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        vTaskDelay(pdMS_TO_TICKS(500));
     }
 }
 
