@@ -566,6 +566,7 @@ uint32_t veml6030_read_light() {
         else {
             printf("I2C Bus fault\n");
         }
+        return 0;
     
     // Closing the I2C connection, though the infinite loop never gets here
     //i2c_deinit(i2c_default);
