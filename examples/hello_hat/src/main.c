@@ -1,13 +1,9 @@
-
 #include <stdio.h>
 #include <string.h>
-
-#include <pico/stdlib.h>
-
+#include "pico/stdlib.h"
 #include <FreeRTOS.h>
 #include <queue.h>
 #include <task.h>
-
 #include "tkjhat/sdk.h"
 
 static void leds_task(void *arg) {
