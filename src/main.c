@@ -39,13 +39,14 @@ static void sensor_task(void *arg){
     // Tehtävä 2: Alusta valoisuusanturi. Etsi SDK-dokumentaatiosta sopiva funktio.
     // Exercise 2: Init the light sensor. Find in the SDK documentation the adequate function.
     init_veml6030();
-    for(;;){
+    while(1){
         
         // Tehtävä 2: Muokkaa tästä eteenpäin sovelluskoodilla. Kommentoi seuraava rivi.
         //             
         // Exercise 2: Modify with application code here. Comment following line.
         //             Read sensor data and print it out as string; 
         //tight_loop_contents();
+        //printf("hello\n");
         if (programState == WAITING) {
             float ambientLight = veml6030_read_light();
             programState = DATA_READY;
@@ -85,7 +86,7 @@ static void print_task(void *arg){
     (void)arg;
     
     while(1){
-        if (programState = DATA_READY) {
+        if (programState == DATA_READY) {
             printf("%u\n", ambientLight);
             programState = WAITING;
 
