@@ -48,12 +48,12 @@ static void sensor_task(void *arg){
         //tight_loop_contents();
         //printf("hello\n");
         if (programState == WAITING) {
-            float ambientLight = veml6030_read_light();
+            ambientLight = veml6030_read_light();
             programState = DATA_READY;
         }
         
 
-        printf("%.2fambient\n", ambientLight);
+        //printf("%u\n", ambientLight);
 
 
    
@@ -75,7 +75,7 @@ static void sensor_task(void *arg){
         
         // Exercise 2. Just for sanity check. Please, comment this out
         // Tehtävä 2: Just for sanity check. Please, comment this out
-        printf("sensorTask\n");
+        //printf("sensorTask\n");
 
         // Do not remove this
         vTaskDelay(pdMS_TO_TICKS(1000));
@@ -87,7 +87,7 @@ static void print_task(void *arg){
     
     while(1){
         if (programState == DATA_READY) {
-            printf("%u\n", ambientLight);
+            printf("%lu\n", ambientLight);
             programState = WAITING;
 
         }
@@ -124,7 +124,7 @@ static void print_task(void *arg){
 
         // Exercise 3. Just for sanity check. Please, comment this out
         // Tehtävä 3: Just for sanity check. Please, comment this out
-        printf("printTask\n");
+        //printf("printTask\n");
         
         // Do not remove this
         vTaskDelay(pdMS_TO_TICKS(500));
