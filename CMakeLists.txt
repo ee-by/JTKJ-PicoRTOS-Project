@@ -91,14 +91,15 @@ add_subdirectory(libs/usb-serial-debug)
 # add_subdirectory(examples/hello_freertos)
 # add_subdirectory(examples/hello_dual_cdc)
 # add_subdirectory(examples/hello_microphone)
-add_subdirectory(examples/compilation_errors)
-add_subdirectory(examples/hello_hat)
+#add_subdirectory(examples/compilation_errors)
+#add_subdirectory(examples/hello_hat)
 # add_subdirectory(examples/hat_example)
 add_subdirectory(examples/hat_imu_ex)
 add_subdirectory(examples/hat_imu_cdc_ex)
 add_subdirectory(examples/hello_serial_client)
 add_subdirectory(examples/hello_serial_bidirectional_client)
 # add_subdirectory(examples/hat_imu_display)
+#add_subdirectory(myproject)
 #
 # You can edit it if you want to add new examples
 # ==============================================================================================
