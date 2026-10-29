@@ -21,6 +21,7 @@ enum state programState = IDLE;
 
 
 
+
 //Initialization of the IMU sensor and reading of data
 
 

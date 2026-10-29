@@ -9,6 +9,7 @@
 
 #include "tkjhat/sdk.h"
 
+
 int32_t ICM42670_read_sensor_data() {
     int position = 0;
 

@@ -6,6 +6,7 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+
 # == EDIT at the beginning. Define the Project name and name for the main target (app).=========
 # Define project name
 set(APP_NAME JTKJ_app) 
