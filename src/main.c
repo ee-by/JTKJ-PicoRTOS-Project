@@ -154,6 +154,27 @@ static void send_task(void *arg){
     }
 }
 
+//Screen functionality (Otso)
+/*static void screen_task(void *arg){
+    (void)arg;
+
+    for(;;){
+        //tight_loop_contents(); // Modify with application code here.
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+}
+*/
+
+
+
+// Able to receive commands from serial monitor.
+// Maybe have a infinite while loop to scan for right commands and then execute them?
+// Command to make: Translate
+// Make the commands in functions.c ???
+
+// Need a Menu structure to select the sensors we want to use?
+
+
 
 
 
