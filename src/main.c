@@ -16,6 +16,8 @@
 
 #define gyro_threshold 35.0
 
+#define CHARS_PER_LINE 16 // Number of characters per line on the display
+
 //State machine states
 enum state { IDLE=1, READING_DATA, SENDING_DATA};
 volatile enum state programState = IDLE;
@@ -25,6 +27,8 @@ int position;
 uint8_t space = 0;
 //Uncomment if we want to transfer to using this over position
 //char symbol;
+
+volatile char receivedSymbol = 0; // Store the received symbol
 
 //Button interrupt function for both buttons
 //The led toggles might be unnecessary
@@ -154,17 +158,115 @@ static void send_task(void *arg){
     }
 }
 
+// Blink for received symbols
+static void blink_received_symbol(char symbol) {
+    if ((symbol == '.') || (symbol == '-')) {
+        set_red_led_status(1);
+
+        if (symbol == '.') {
+            vTaskDelay(pdMS_TO_TICKS(100)); // Dot, short blink
+
+        } else {
+            vTaskDelay(pdMS_TO_TICKS(300)); // Dash, long blink
+        } 
+        set_red_led_status(0);
+        vTaskDelay(pdMS_TO_TICKS(100)); // Delay between blinks
+    }
+
+    else if (symbol == ' ') {
+        // Delay between words (space)
+        vTaskDelay(pdMS_TO_TICKS(200));
+
+    }
+}
+
 //Screen functionality (Otso)
-/*static void screen_task(void *arg){
+static void screen_task(void *arg){
     (void)arg;
+    char text[CHARS_PER_LINE + 1] = "";
+    int length = 0;
+    uint8_t newMessage = 0;
+    char symbol;
+
+    clear_display();
 
     for(;;){
+        if (receivedSymbol != 0) {
+            symbol = receivedSymbol;
+            receivedSymbol = 0;
+
+            if (symbol == '\n') {
+                newMessage = 1; // End message
+            }
+            
+            else {
+                if ((newMessage == 1) || (length >= CHARS_PER_LINE)) { // new message or line full, clear display
+                    clear_display();
+                    length = 0;
+                    newMessage = 0;
+                }
+            text[length] = symbol; // Store received symbol in array
+            length++; // Add space for next symbol
+            text[length] = '\0'; // Terminate string
+            write_text_xy(0, 0, text); // Write text to display
+            blink_received_symbol(symbol); // Blink LED for received symbol
+            }
+
+
+            
+        }
         //tight_loop_contents(); // Modify with application code here.
         vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
-*/
 
+//TEST FOR RECEIVING DATA FROM SERIAL MONITOR (made by claude, delete when not needed)
+static void fake_receive_task(void *arg){
+    (void)arg;
+
+    const char *message = ".... . .-.. .-.. ---  .-- --- .-. .-.. -..  \n";
+
+    for(;;){
+        for (int i = 0; message[i] != '\0'; i++) {
+            while (receivedSymbol != 0) {
+                vTaskDelay(pdMS_TO_TICKS(10)); //Wait until the last symbol has been handled
+            }
+            receivedSymbol = message[i];
+        }
+        vTaskDelay(pdMS_TO_TICKS(5000));
+    }
+}
+
+//Note for music functionality
+
+typedef struct {
+    uint32_t frequency; // Hz
+    uint32_t duration; // ms
+} note_t;
+
+static const note_t melody[] = {
+    {440, 500},{494, 500}, {523, 500}, {587, 500}, 
+    {659, 500}, {698, 500}, {784, 500}, 
+};
+
+static void play_melody(const note_t *melody, int count) {
+    for (int i = 0; i < count; i++) {
+        if (melody[i].frequency == 0) {
+            vTaskDelay(pdMS_TO_TICKS(melody[i].duration)); //No note
+        } else {
+            buzzer_play_tone(melody[i].frequency, melody[i].duration); //Play note
+            vTaskDelay(pdMS_TO_TICKS(30)); //Delay between notes
+        }
+    }
+}
+
+//Task for music functionality
+static void music_task(void *arg){
+    (void)arg;
+
+    play_melody(melody, sizeof(melody) / sizeof(melody[0]));
+    vTaskDelete(NULL); // Delete task after playing the melody
+}
 
 
 // Able to receive commands from serial monitor.
@@ -195,6 +297,12 @@ int main() {
     init_red_led();
     init_sw1();
     init_sw2();
+
+    //initialize display
+    init_display();
+
+    //initialize buzzer
+    init_buzzer();
 
     //Set button1 interrupt
     gpio_set_irq_enabled_with_callback(BUTTON1, GPIO_IRQ_EDGE_FALL, true, btn_fxn);
@@ -227,6 +335,35 @@ int main() {
 
     if(result != pdPASS) {
         printf("Send Task creation failed\n");
+        return 0;
+    }
+
+    //Task for screen functionality
+    result = xTaskCreate(screen_task,  // (en) Task function
+                "screen",              // (en) Name of the task 
+                DEFAULT_STACK_SIZE,   // (en) Size of the stack for this task (in words). Generally 1024 or 2048
+                NULL,                 // (en) Arguments of the task 
+                2,                    // (en) Priority of this task
+                NULL);         // (en) A handle to control the execution of this task
+
+    if (result != pdPASS) {
+        printf("Screen Task creation failed\n");
+        return 0;
+    }
+
+    //Task for playing music
+    result = xTaskCreate(music_task, "music", DEFAULT_STACK_SIZE, NULL, 2, NULL);
+
+    if(result != pdPASS) {
+        printf("Music Task creation failed\n");
+        return 0;
+    }
+
+    //TEST ONLY: remove when the real receive task exists
+    result = xTaskCreate(fake_receive_task, "fake_receive", DEFAULT_STACK_SIZE, NULL, 2, NULL);
+
+    if(result != pdPASS) {
+        printf("Fake receive Task creation failed\n");
         return 0;
     }
 
@@ -281,3 +418,13 @@ Button2 once, button1 thrice when Pico is lying on any of its sides:
 -
 T. Aatu
 */
+
+/*
+15.11.2026
+Added screen funtionalities to display received symbols, the receiving logic is not yet ready, so I implemented a test receive task
+Also added the led blinking for received symbols, the led blinks for a dot or dash and has a delay for a space
+Added the melody functionality, the melody is played once when the program starts, the task is deleted after playing the melody
+T. Otso
+
+*/
+
