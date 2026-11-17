@@ -162,6 +162,8 @@ static void beep(void) {
 
 //Task for light sensor functionality (second option for sending data)
 static void light_sensor_task(void *arg){
+
+    //Important for initialization
     vTaskDelay(pdMS_TO_TICKS(500));
     (void)arg;
 
