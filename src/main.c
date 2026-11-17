@@ -21,12 +21,16 @@
 #define VEML_THRESHOLD 20 // Threshold for light sensor to be considered covered
 
 //State machine states
-enum state { IDLE=1, READING_DATA, SENDING_DATA};
-volatile enum state programState = IDLE;
+enum state { IDLE=1, READING_DATA, SENDING_DATA, MENU, SELECTED_SENSOR};
+volatile enum state programState = MENU;
 
 //Global variables here
-int position;
-uint8_t space = 0;
+volatile int position;
+volatile uint8_t space = 0;
+
+volatile uint8_t sensor = 1; //Specifies which sensor the user wants to use to send morse code. 1 is default for accelerometer and 2 should be for lightsensor
+//We could use this in the menu to choose which sensor to use
+
 //Uncomment if we want to transfer to using this over position
 //char symbol;
 
@@ -35,18 +39,40 @@ volatile char receivedSymbol = 0; // Store the received symbol
 //Button interrupt function for both buttons
 //The led toggles might be unnecessary
 static void btn_fxn(uint gpio, uint32_t eventMask) {
-    //If button 1 is pressed, the code continues to read the sensor data and send it
-    if (gpio == BUTTON1) {
-        toggle_led();
-        programState = READING_DATA;
-        toggle_led();
+    //printf("Button pressed: %d, State: %d, Sensor: %d\n",
+    //       gpio, programState, sensor);
+    //Check if we are in menu
+    if (programState == MENU) {
+        //Change selected sensor in menu
+        if (gpio == BUTTON1) {
+            if (sensor == 1) {
+                sensor = 2;
+            }
+            else {
+                sensor = 1;
+            }
+        }
+        //Select the indicated sensor
+        else if (gpio == BUTTON2) {
+            programState = SELECTED_SENSOR;
+        }
     }
-    
-    //If button 2 is pressed, the Pico sends a space
-    else if (gpio == BUTTON2) {
-        toggle_led();
-        space = 1;
-        toggle_led();
+
+    //If we are not in menu
+    else {
+        //If button 1 is pressed, the code continues to read the sensor data and send it
+        if (gpio == BUTTON1) {
+            //toggle_led();
+            programState = READING_DATA;
+            //toggle_led();
+        }
+        
+        //If button 2 is pressed, the Pico sends a space
+        else if (gpio == BUTTON2) {
+            //toggle_led();
+            space = 1;
+            //toggle_led();
+        }
     }
 }
 
@@ -55,11 +81,13 @@ static void btn_fxn(uint gpio, uint32_t eventMask) {
 
 //Do the sensor task
 static void sensor_task(void *pvParameters){
+    
     (void)pvParameters;
 
     //Introduce the variables
     float ax, ay, az, gx, gy, gz, t;
 
+    
     //Initialize the IMU sensor
     if (init_ICM42670() == 0) {
         printf("ICM-42670P initialized successfully!\n");
@@ -74,9 +102,9 @@ static void sensor_task(void *pvParameters){
         printf("Failed to initialize ICM-42670P.\n");
     }
 
+    printf("Reading accelerometer...\n");
     while(1){
-            
-        if (programState == READING_DATA) {
+        if ((sensor == 1) && (programState == READING_DATA)) {
             if (ICM42670_read_sensor_data(&ax, &ay, &az, &gx, &gy, &gz, &t) == 0) {
                 //printf("Accel: X=%f, Y=%f, Z=%f | Gyro: X=%f, Y=%f, Z=%f| Temp: %2.2f°C\n", ax, ay, az, gx, gy, gz, t);
 
@@ -117,16 +145,24 @@ static void sensor_task(void *pvParameters){
         
         vTaskDelay(pdMS_TO_TICKS(100));
         }
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
+    //vTaskDelay(pdMS_TO_TICKS(100));
     
 }
+
+
+
 //Beep when symbol is sent
 static void beep(void) {
     buzzer_play_tone(1000, 50);
 }
 
+
+
 //Task for light sensor functionality (second option for sending data)
 static void light_sensor_task(void *arg){
+    vTaskDelay(pdMS_TO_TICKS(500));
     (void)arg;
 
     init_veml6030();
@@ -135,25 +171,32 @@ static void light_sensor_task(void *arg){
     int cover = 0; // Variable to track if the sensor is covered
 
     for(;;){
-        lux = veml6030_read_light();
+        if ((sensor == 2) && (programState != MENU) && (programState != SELECTED_SENSOR)) {
+            lux = veml6030_read_light();
 
-        if (lux < VEML_THRESHOLD) {
-            cover++; // If sensor is covered, add to the cover count
-        }
-        else {
-            if (cover >= 5) {
-                printf("-"); // If sensor is covered for 500 ms, send line
-                fflush(stdout);
-                beep();
+            if (lux < VEML_THRESHOLD) {
+                //Check for unnecessary big cover value
+                if (cover < 5) {
+                    cover++; // If sensor is covered, add to the cover count
+                }
+                
             }
-            else if (cover > 0) {
-                printf("."); // Else, send dot
-                fflush(stdout);
-                beep();
+            else {
+                if (cover >= 5) {
+                    printf("-"); // If sensor is covered for 500 ms, send line
+                    fflush(stdout);
+                    beep();
+                }
+                else if (cover > 0) {
+                    printf("."); // Else, send dot
+                    fflush(stdout);
+                    beep();
+                }
+                cover = 0; // Reset the cover count if the sensor is not covered
             }
-            cover = 0; // Reset the cover count if the sensor is not covered
+            vTaskDelay(pdMS_TO_TICKS(100));
         }
-        vTaskDelay(pdMS_TO_TICKS(100));
+    vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
 
@@ -225,6 +268,11 @@ static void blink_received_symbol(char symbol) {
     }
 }
 
+
+
+
+
+/*
 //Screen functionality (Otso)
 static void screen_task(void *arg){
     (void)arg;
@@ -264,7 +312,13 @@ static void screen_task(void *arg){
         vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
+*/
 
+
+
+
+
+/*
 //TEST FOR RECEIVING DATA FROM SERIAL MONITOR (made by claude, delete when not needed)
 static void fake_receive_task(void *arg){
     (void)arg;
@@ -281,6 +335,11 @@ static void fake_receive_task(void *arg){
         vTaskDelay(pdMS_TO_TICKS(5000));
     }
 }
+*/
+
+
+
+
 
 //Note for music functionality
 
@@ -326,6 +385,95 @@ static void music_task(void *arg){
 
 
 
+
+
+
+//Function to show the menu on the oled indicating which of the sensors is being selected
+static void show_menu(void) {
+
+    //First let's clear the display, in case there are any symbols from other tasks
+    clear_display();
+
+    //If the selected sensor is accelerometer (default)
+    if (sensor == 1) {
+        write_text_xy(0, 0, "> Accelerometer");
+        write_text_xy(0, 10, "  Light sensor");
+    }
+    //If the selected sensor is lightsensor
+    else {
+        write_text_xy(0, 0, "  Accelerometer");
+        write_text_xy(0, 10, "> Light sensor");
+    }
+
+}
+
+//Task for showing the menu and selecting the sensor from it
+static void menu_task(void *arg) {
+    //Important so that the initialization isn't interfered with
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    (void)arg;
+
+    //For checking ifwe need to update the screen based on if the selected sensor has changed
+    uint8_t previous_sensor = 0;
+
+    //Infinite loop
+    while (1) {
+        //Check state
+        if (programState == MENU) {
+            //Check if selected sensor has changed and update the screen as well as the previous sensor variable
+            if (sensor != previous_sensor) {
+                show_menu();
+                previous_sensor = sensor;
+            }
+        }
+
+        //Check for different state (when the sensor has been selected)
+        else if (programState == SELECTED_SENSOR) {
+            //Clear in case symbols from previous tasks
+            clear_display();
+
+            //Check which sensor has been selected and show that on screen
+            
+            //accelerometer:
+            if (sensor == 1) {
+                write_text_xy(0, 0, "Selected:");
+                write_text_xy(0, 10, "Accelerometer");
+            }
+
+            //Light sensor
+            else {
+                write_text_xy(0, 0, "Selected:");
+                write_text_xy(0, 10, "Light sensor");
+            }
+
+            //Delay to show the selected sensor briefly
+            vTaskDelay(pdMS_TO_TICKS(1500));
+
+            //Clear the display of the selected sensor so blank screen for morse tasks
+            clear_display();
+
+            //Set program state
+            programState = IDLE;
+
+
+            //hMenuTask = NULL;
+            //vTaskDelete(NULL);
+            //Set previous sensor to zero so if the menu is accessed in the future by implementing a button combination or something to return to it, it shows correctly
+            previous_sensor = 0;
+        }
+        vTaskDelay(pdMS_TO_TICKS(100));
+        
+        
+
+    }
+    
+}
+
+
+
+
+
+
 int main() {
     //Initialize everything first
     stdio_init_all();
@@ -356,6 +504,7 @@ int main() {
     //Create handle
     TaskHandle_t hSensorTask = NULL;
     TaskHandle_t hSendTask = NULL;
+    TaskHandle_t hMenuTask = NULL;
     
     // Create the tasks with xTaskCreate
     //Sensortask for reading sensors
@@ -370,6 +519,21 @@ int main() {
         printf("Sensor Task creation failed\n");
         return 0;
     }
+    //Task for menu
+    result = xTaskCreate(menu_task,  // (en) Task function
+                "menu",              // (en) Name of the task 
+                DEFAULT_STACK_SIZE,   // (en) Size of the stack for this task (in words). Generally 1024 or 2048
+                NULL,                 // (en) Arguments of the task 
+                2,                    // (en) Priority of this task
+                &hMenuTask);         // (en) A handle to control the execution of this task
+
+    if(result != pdPASS) {
+        printf("Send Task creation failed\n");
+        return 0;
+    }
+
+
+
     //Task for sending data
     result = xTaskCreate(send_task,  // (en) Task function
                 "send",              // (en) Name of the task 
@@ -383,6 +547,11 @@ int main() {
         return 0;
     }
 
+
+
+
+
+    /*
     //Task for screen functionality
     result = xTaskCreate(screen_task,  // (en) Task function
                 "screen",              // (en) Name of the task 
@@ -395,6 +564,11 @@ int main() {
         printf("Screen Task creation failed\n");
         return 0;
     }
+    */
+
+
+
+
 
     //Task for playing music
     result = xTaskCreate(music_task, "music", DEFAULT_STACK_SIZE, NULL, 2, NULL);
@@ -412,6 +586,11 @@ int main() {
         return 0;
     }
 
+
+
+
+
+    /*
     //TEST ONLY: remove when the real receive task exists
     result = xTaskCreate(fake_receive_task, "fake_receive", DEFAULT_STACK_SIZE, NULL, 2, NULL);
 
@@ -419,6 +598,11 @@ int main() {
         printf("Fake receive Task creation failed\n");
         return 0;
     }
+    */
+
+
+
+
 
     // Start the scheduler (never returns)
     vTaskStartScheduler();
@@ -489,3 +673,21 @@ T. Otso
 
 */
 
+
+
+/*
+18.11.2026
+Added menu-related states to statemachine
+Changed some variables to volatile
+Added uint_8t sensor variable to indicate which sensor to use
+Also added checks for that in sensortask and lightsensortask
+Modified btn_fxn to check for menu. Works differently in menu and in other states
+Added a threshold (5) in the lightsensortask so it doesn't increase coutner too high
+Made showmenu function to aid menutask in showing the menu on oled
+Made menu task. At start, gives user the option to switch sensor(BUTTON1) and select a sensor(BUTTON2).
+Menu shows the selected sensor for 1,5s after selection
+
+Had to comment out some of the screen functions for receiving symbols. We should work on integrating those back
+
+T. Aatu 
+*/
