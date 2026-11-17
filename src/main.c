@@ -18,6 +18,8 @@
 
 #define CHARS_PER_LINE 16 // Number of characters per line on the display
 
+#define VEML_THRESHOLD 20 // Threshold for light sensor to be considered covered
+
 //State machine states
 enum state { IDLE=1, READING_DATA, SENDING_DATA};
 volatile enum state programState = IDLE;
@@ -118,6 +120,44 @@ static void sensor_task(void *pvParameters){
     }
     
 }
+//Beep when symbol is sent
+static void beep(void) {
+    buzzer_play_tone(1000, 50);
+}
+
+//Task for light sensor functionality (second option for sending data)
+static void light_sensor_task(void *arg){
+    (void)arg;
+
+    init_veml6030();
+    vTaskDelay(pdMS_TO_TICKS(500)); // Wait for the sensor to initialize
+    uint32_t lux;
+    int cover = 0; // Variable to track if the sensor is covered
+
+    for(;;){
+        lux = veml6030_read_light();
+
+        if (lux < VEML_THRESHOLD) {
+            cover++; // If sensor is covered, add to the cover count
+        }
+        else {
+            if (cover >= 5) {
+                printf("-"); // If sensor is covered for 500 ms, send line
+                fflush(stdout);
+                beep();
+            }
+            else if (cover > 0) {
+                printf("."); // Else, send dot
+                fflush(stdout);
+                beep();
+            }
+            cover = 0; // Reset the cover count if the sensor is not covered
+        }
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+}
+
+
 
 //Do the task that sends data
 static void send_task(void *arg){
@@ -126,6 +166,7 @@ static void send_task(void *arg){
     for(;;){
         if (space == 1) {
             printf(" \n");
+            beep();
             space = 0;
         }
         else if (programState == SENDING_DATA) {
@@ -140,10 +181,14 @@ static void send_task(void *arg){
             fflush(stdout);
             */
             if ((position == 1) || (position == 3)) {
-                printf("-\n");
+                printf("-");
+                fflush(stdout);
+                beep();
             }
             else if (position == 2) {
-                printf(".\n");
+                printf(".");
+                fflush(stdout);
+                beep();
             }
             else {
                 printf("Unknown position \n");
@@ -359,6 +404,14 @@ int main() {
         return 0;
     }
 
+    //Task for light sensor functionality
+    result = xTaskCreate(light_sensor_task, "light_sensor", DEFAULT_STACK_SIZE, NULL, 2, NULL);
+
+    if(result != pdPASS) {
+        printf("Light Sensor Task creation failed\n");
+        return 0;
+    }
+
     //TEST ONLY: remove when the real receive task exists
     result = xTaskCreate(fake_receive_task, "fake_receive", DEFAULT_STACK_SIZE, NULL, 2, NULL);
 
@@ -424,6 +477,14 @@ T. Aatu
 Added screen funtionalities to display received symbols, the receiving logic is not yet ready, so I implemented a test receive task
 Also added the led blinking for received symbols, the led blinks for a dot or dash and has a delay for a space
 Added the melody functionality, the melody is played once when the program starts, the task is deleted after playing the melody
+T. Otso
+
+17.11.2026
+Added light sensor functionality as a second option for sending symbols.
+If sensor is covered for 500 ms, a dash is sent, if it is covered for less than 500 ms, a dot is sent.
+Added beep functionality when sending symbols.
+
+IDEA FOR LATER: Create a menu to select the sensor. Press both buttons to enter menu, button 1 move, button 2 select. How to create on screen?
 T. Otso
 
 */
