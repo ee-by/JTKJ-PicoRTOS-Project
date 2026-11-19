@@ -354,8 +354,10 @@ typedef struct {
 } note_t;
 
 static const note_t melody[] = {
-    {440, 500},{494, 500}, {523, 500}, {587, 500}, 
-    {659, 500}, {698, 500}, {784, 500}, 
+    {554, 500}, {523, 500}, {466, 500},
+    {523, 1500}, {415, 500},
+    {415, 500}, {466, 1200}, {0, 50}, {415, 200}, {0, 50},
+    {415, 2500},
 };
 
 static void play_melody(const note_t *melody, int count) {
@@ -819,10 +821,10 @@ T. Aatu
 Added morse translator functionality. Can encode and decode morse code.
 Made a table for the menu. New items can easily be added. Added Translator.
 Changed the logic of the buttons in the menu
-Assigne BTN2 to exit if the mode is translator. This way it doesn't print a space if pressed accidentally.
+Assigned BTN2 to exit if the mode is translator. This way it doesn't print a space if pressed accidentally.
 Changed show_menu and menu_task to work with the new menu table and the new menu items.
 Made the menu able to handle adding new items automatically.
-Added tranlate_task to handle the translator functionality. 
+Added translate_task to handle the translator functionality. 
     Translate task uses fgets, which blocks until Enter is pressed. Maybe need to change the logic if it disrupts other tasks.
 Changed the melody of the music. Old melody is attached below if needed:
 
@@ -830,5 +832,8 @@ Changed the melody of the music. Old melody is attached below if needed:
     {440, 500},{494, 500}, {523, 500}, {587, 500}, 
     {659, 500}, {698, 500}, {784, 500}, 
 };
+T. Eero
+
+
 
 */
