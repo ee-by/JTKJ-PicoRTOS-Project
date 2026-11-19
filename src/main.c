@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <string.h>
-
+#include <ctype.h>
 #include <math.h>
 
 #include <pico/stdlib.h>
@@ -21,8 +21,12 @@
 #define VEML_THRESHOLD 20 // Threshold for light sensor to be considered covered
 
 //State machine states
-enum state { IDLE=1, READING_DATA, SENDING_DATA, MENU, SELECTED_SENSOR};
+enum state { IDLE=1, READING_DATA, SENDING_DATA, MENU, SELECTED_SENSOR, TRANSLATOR};
 volatile enum state programState = MENU;
+
+//Create a table for the menu items
+static const char *menu_items[] = {"Accelerometer", "Light sensor", "Translator"};
+#define MENU_COUNT (sizeof(menu_items) / sizeof(menu_items[0]))
 
 //Global variables here
 volatile int position;
@@ -45,16 +49,15 @@ static void btn_fxn(uint gpio, uint32_t eventMask) {
     if (programState == MENU) {
         //Change selected sensor in menu
         if (gpio == BUTTON1) {
-            if (sensor == 1) {
-                sensor = 2;
-            }
-            else {
-                sensor = 1;
-            }
+            sensor = (sensor % MENU_COUNT) + 1;   // 1 -> 2 -> 3 -> 1
         }
-        //Select the indicated sensor
         else if (gpio == BUTTON2) {
             programState = SELECTED_SENSOR;
+        }
+    }
+    else if (programState == TRANSLATOR) {      // If we are in translator mode, quick exit to menu with button 2
+        if (gpio == BUTTON2) {                  // Consider making it possible to exit any mode with e.g. long press on button 2
+            programState = MENU;                  // exit back to the menu
         }
     }
 
@@ -396,16 +399,14 @@ static void show_menu(void) {
     //First let's clear the display, in case there are any symbols from other tasks
     clear_display();
 
-    //If the selected sensor is accelerometer (default)
-    if (sensor == 1) {
-        write_text_xy(0, 0, "> Accelerometer");
-        write_text_xy(0, 10, "  Light sensor");
-    }
-    //If the selected sensor is lightsensor
-    else {
-        write_text_xy(0, 0, "  Accelerometer");
-        write_text_xy(0, 10, "> Light sensor");
-    }
+    // Display the menu items and indicate the selected one.
+    for (uint8_t i = 0; i < MENU_COUNT; i++) {
+        char line[CHARS_PER_LINE + 1];
+        // snprintf drops trailing characters if the string is too long
+        snprintf(line, sizeof(line), "%c %s", (sensor == i + 1) ? '>' : ' ', menu_items[i]);
+        // Print each row 10 pixels lower
+        write_text_xy(0, i * 10, line); 
+}       // New menu items can be added to the menu array and they will automatically be displayed.
 
 }
 
@@ -431,49 +432,160 @@ static void menu_task(void *arg) {
 
         //Check for different state (when the sensor has been selected)
         else if (programState == SELECTED_SENSOR) {
-            //Clear in case symbols from previous tasks
             clear_display();
+            // Show the selected sensor on the screen
+            write_text_xy(0, 0, "Selected:");
+            write_text_xy(0, 10, menu_items[sensor - 1]);
 
-            //Check which sensor has been selected and show that on screen
-            
-            //accelerometer:
-            if (sensor == 1) {
-                write_text_xy(0, 0, "Selected:");
-                write_text_xy(0, 10, "Accelerometer");
-            }
-
-            //Light sensor
-            else {
-                write_text_xy(0, 0, "Selected:");
-                write_text_xy(0, 10, "Light sensor");
-            }
-
-            //Delay to show the selected sensor briefly
+            // Delay to show the selected sensor briefly
             vTaskDelay(pdMS_TO_TICKS(1500));
-
-            //Clear the display of the selected sensor so blank screen for morse tasks
+            // clear display for the tasks
             clear_display();
 
-            //Set program state
-            programState = IDLE;
+            if (sensor == 3) {
+                write_text_xy(0, 0, "Translator");
+                write_text_xy(0, 10, "BTN2: exit"); // Assigned BTN2 to exit, so it doesn't printf ' '
+                                                    // Change this later if we establish a universal exit method for all tasks.
+                programState = TRANSLATOR;
+            } else {
 
+                // set programstate
+                programState = IDLE;
+            }
 
-            //hMenuTask = NULL;
-            //vTaskDelete(NULL);
-            //Set previous sensor to zero so if the menu is accessed in the future by implementing a button combination or something to return to it, it shows correctly
-            previous_sensor = 0;
+            previous_sensor = 0;   // Reset so if the menu is accessed again, it shows correctly
         }
-        vTaskDelay(pdMS_TO_TICKS(100));
-        
-        
-
-    }
-    
+    }    
 }
 
 
+// ---------------- MORSE TRANSLATOR -------
 
+// Create the table
+typedef struct {
+    char ch;
+    const char *code;
+} MorseChar;
 
+static const MorseChar table[] = {
+    {'A', ".-"},   {'B', "-..."}, {'C', "-.-."}, {'D', "-.."},
+    {'E', "."},    {'F', "..-."}, {'G', "--."},  {'H', "...."},
+    {'I', ".."},   {'J', ".---"}, {'K', "-.-"},  {'L', ".-.."},
+    {'M', "--"},   {'N', "-."},   {'O', "---"},  {'P', ".--."},
+    {'Q', "--.-"}, {'R', ".-."},  {'S', "..."},  {'T', "-"},
+    {'U', "..-"},  {'V', "...-"}, {'W', ".--"},  {'X', "-..-"},
+    {'Y', "-.--"}, {'Z', "--.."}, {'0', "-----"}, {'1', ".----"}, 
+    {'2', "..---"}, {'3', "...--"}, {'4', "....-"}, {'5', "....."}, 
+    {'6', "-...."}, {'7', "--..."}, {'8', "---.."}, {'9', "----."}
+};
+
+// Calculate the size of the table
+#define TABLE_SIZE (sizeof(table) / sizeof(table[0])) 
+
+// encode character
+static const char *encode_char(char c) { // const to not modify the returned string
+    c = (char)toupper((unsigned char)c); // Convert to uppercase
+    for (size_t i = 0; i < TABLE_SIZE; i++) { // Go through the table
+        if (table[i].ch == c) { 
+            return table[i].code; // If found, return the Morse code
+        }
+    }
+    return NULL; // Return NULL if character is not found
+}
+
+// decode Morse code
+static char decode_symbol(const char *code) { 
+    for (size_t i = 0; i < TABLE_SIZE; i++) { // go through again
+        if (strcmp(table[i].code, code) == 0) {
+            return table[i].ch; // If found, return the character
+        }
+    }
+    return '?'; // Return '?' if Morse code is not found
+}
+
+// encode string
+static void encode_string(const char *string) {
+    for (size_t i = 0; string[i] != '\0'; i++) {
+        if (string[i] == ' ') {
+            printf("/ "); // Use "/" to represent a space between words for now
+        } else {
+            const char *code = encode_char(string[i]);
+            if (code != NULL) {
+                printf("%s ", code);
+            } else {
+                printf("? ");
+            }
+        }
+    }
+    printf("\n");
+}
+
+// decode code to string
+static void decode_string(char *morse) {
+    char *saveptr;
+    char *token = strtok_r(morse, " ", &saveptr);
+    while (token != NULL) {
+        if (strcmp(token, "/") == 0) {
+            putchar(' ');
+        } else {
+            putchar(decode_symbol(token));
+        }
+        token = strtok_r(NULL, " ", &saveptr);
+    }
+    printf("\n");
+}
+
+// Helper function to get a line of input from the user
+// Waits until Enter is pressed, which might be a problem at some point
+static bool get_line(char *buf, size_t size) {
+    if (fgets(buf, size, stdin) == NULL) return false;
+    buf[strcspn(buf, "\r\n")] = '\0';   // overwrite newline with null terminator
+    return buf[0] != '\0';              // return false if the line is empty
+}
+
+// Helper to clear inputbuffer, so no leftover characters are read
+static void clear_input(void) {
+    while (getchar_timeout_us(0) != PICO_ERROR_TIMEOUT) {}
+}
+
+// Task for the translator functionality
+static void translate_task(void *arg) {
+    (void)arg;
+    char line[128];         // Buffer for user input
+    bool wasActive = false; // Detects the moment the translator is entered, so we can clear the input buffer and print the prompt
+
+    for (;;) {
+        if (programState != TRANSLATOR) {
+            wasActive = false;      // Sets the flag if machine is in any other state
+        } else {
+            if (!wasActive) {       // If the translator is entered, clears the input buffer and print the prompt
+                clear_input();
+                printf("Do you want to encode or decode? Type: (e / d) \n");
+                wasActive = true;
+            }
+
+            if (get_line(line, sizeof(line)) && programState == TRANSLATOR) { // waits for an answer
+                char mode = tolower((unsigned char)line[0]);    // Takes the first character and converts it to lowercase
+                                                                // Lets the user type more characters.
+                                                                // Might even let wrong words through, but we only care about the first character anyway
+                if (mode == 'e' || mode == 'd') {
+                    printf("Enter text or code:\n");
+                    // If e or d is selected, asked for the text or code to be handled.
+                    if (get_line(line, sizeof(line)) && programState == TRANSLATOR) { 
+                        if (mode == 'e') encode_string(line);   // encodes
+                        else             decode_string(line);   // decodes
+                        printf("\nEncode or decode? (e/d)\n");    // ask again for new input
+                    }
+                } else {
+                    printf("Please enter e or d\n"); // Hint if user enters something else than e or d
+                }
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(20));   // Gives time for other tasks to run, since using fgets
+    }
+}
+
+// ----------------------
 
 
 int main() {
@@ -588,7 +700,12 @@ int main() {
         return 0;
     }
 
-
+    // Task for translator
+    result = xTaskCreate(translate_task, "translate", DEFAULT_STACK_SIZE, NULL, 1, NULL);
+    if (result != pdPASS) {
+        printf("Translate Task creation failed\n");
+        return 0;
+    }
 
 
 
@@ -692,4 +809,26 @@ Menu shows the selected sensor for 1,5s after selection
 Had to comment out some of the screen functions for receiving symbols. We should work on integrating those back
 
 T. Aatu 
+
+
+*/
+
+
+/*
+19.11.2026
+Added morse translator functionality. Can encode and decode morse code.
+Made a table for the menu. New items can easily be added. Added Translator.
+Changed the logic of the buttons in the menu
+Assigne BTN2 to exit if the mode is translator. This way it doesn't print a space if pressed accidentally.
+Changed show_menu and menu_task to work with the new menu table and the new menu items.
+Made the menu able to handle adding new items automatically.
+Added tranlate_task to handle the translator functionality. 
+    Translate task uses fgets, which blocks until Enter is pressed. Maybe need to change the logic if it disrupts other tasks.
+Changed the melody of the music. Old melody is attached below if needed:
+
+ static const note_t melody[] = {
+    {440, 500},{494, 500}, {523, 500}, {587, 500}, 
+    {659, 500}, {698, 500}, {784, 500}, 
+};
+
 */
