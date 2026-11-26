@@ -31,6 +31,7 @@ static const char *menu_items[] = {"Accelerometer", "Light sensor", "Translator"
 //Global variables here
 volatile int position;
 volatile uint8_t space = 0;
+volatile int spaceCounter = 0; //Count how many spaces have been sent
 
 volatile uint8_t sensor = 1; //Specifies which sensor the user wants to use to send morse code. 1 is default for accelerometer and 2 should be for lightsensor
 //We could use this in the menu to choose which sensor to use
@@ -161,6 +162,11 @@ static void beep(void) {
     buzzer_play_tone(1000, 50);
 }
 
+//Feedback when message is sent
+static void feedback(void) {
+    buzzer_play_tone(1000, 100);
+    buzzer_play_tone(1500, 200);
+}
 
 
 //Task for light sensor functionality (second option for sending data)
@@ -213,9 +219,19 @@ static void send_task(void *arg){
 
     for(;;){
         if (space == 1) {
-            printf(" \n");
-            beep();
-            space = 0;
+            if (spaceCounter >= 3) { // If space has been pressed 3 times, send message
+                printf("\n");
+                fflush(stdout);
+                feedback();
+                spaceCounter = 0;
+            }
+            else { //Else print space
+                printf(" ");
+                fflush(stdout);
+                feedback();
+                spaceCounter++;
+            }
+ 
         }
         else if (programState == SENDING_DATA) {
             //For testing, should be removed later
@@ -277,7 +293,7 @@ static void blink_received_symbol(char symbol) {
 
 
 
-/*
+
 //Screen functionality (Otso)
 static void screen_task(void *arg){
     (void)arg;
@@ -293,7 +309,12 @@ static void screen_task(void *arg){
             symbol = receivedSymbol;
             receivedSymbol = 0;
 
-            if (symbol == '\n') {
+            if ((programState == MENU) || (programState == SELECTED_SENSOR)  || (programState == TRANSLATOR)) {
+                // Ignore receive_task when in these states
+                continue;
+            }
+
+            else if (symbol == '\n') {
                 newMessage = 1; // End message
             }
             
@@ -317,7 +338,7 @@ static void screen_task(void *arg){
         vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
-*/
+
 
 
 
@@ -430,6 +451,7 @@ static void menu_task(void *arg) {
                 show_menu();
                 previous_sensor = sensor;
             }
+            vTaskDelay(pdMS_TO_TICKS(50));
         }
 
         //Check for different state (when the sensor has been selected)
@@ -587,7 +609,25 @@ static void translate_task(void *arg) {
     }
 }
 
-// ----------------------
+
+//Task for receiving symbols from serial monitor.
+static void receive_task(void *arg) {
+    (void)arg;
+
+    for (;;) {
+        if (programState != TRANSLATOR) {
+            int c = getchar_timeout_us(0); // don't wait for input if not in translator mode
+
+            if ((c != PICO_ERROR_TIMEOUT) && (c != '\r')) { // Ignore newline characters
+                while (receivedSymbol != 0) { // Wait until last symbol is processed
+                    vTaskDelay(pdMS_TO_TICKS(10));
+                }
+                receivedSymbol = (char)c; // Store character
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(20));
+    }
+}
 
 
 int main() {
@@ -667,7 +707,7 @@ int main() {
 
 
 
-    /*
+    
     //Task for screen functionality
     result = xTaskCreate(screen_task,  // (en) Task function
                 "screen",              // (en) Name of the task 
@@ -680,7 +720,7 @@ int main() {
         printf("Screen Task creation failed\n");
         return 0;
     }
-    */
+    
 
 
 
@@ -706,6 +746,14 @@ int main() {
     result = xTaskCreate(translate_task, "translate", DEFAULT_STACK_SIZE, NULL, 1, NULL);
     if (result != pdPASS) {
         printf("Translate Task creation failed\n");
+        return 0;
+    }
+
+    //Task for receiving symbols from serial monitor
+    result = xTaskCreate(receive_task, "receive", DEFAULT_STACK_SIZE, NULL, 2, NULL);
+
+    if (result != pdPASS) {
+        printf("Receive Task creation failed\n");
         return 0;
     }
 
