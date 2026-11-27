@@ -219,7 +219,7 @@ static void send_task(void *arg){
 
     for(;;){
         if (space == 1) {
-            if (spaceCounter >= 3) { // If space has been pressed 3 times, send message
+            if (spaceCounter >= 2) { // If space has been pressed 3 times, send message
                 printf("\n");
                 fflush(stdout);
                 feedback();
@@ -228,9 +228,10 @@ static void send_task(void *arg){
             else { //Else print space
                 printf(" ");
                 fflush(stdout);
-                feedback();
+                beep();
                 spaceCounter++;
             }
+            space = 0;
  
         }
         else if (programState == SENDING_DATA) {
