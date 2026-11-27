@@ -401,18 +401,6 @@ static void music_task(void *arg){
 }
 
 
-// Able to receive commands from serial monitor.
-// Maybe have a infinite while loop to scan for right commands and then execute them?
-// Command to make: Translate
-// Make the commands in functions.c ???
-
-// Need a Menu structure to select the sensors we want to use?
-
-
-
-
-
-
 
 
 
@@ -528,16 +516,16 @@ static char decode_symbol(const char *code) {
 }
 
 // encode string
-static void encode_string(const char *string) {
-    for (size_t i = 0; string[i] != '\0'; i++) {
+static void encode_string(const char *string) { // won't modify the input
+    for (size_t i = 0; string[i] != '\0'; i++) { // Go through the string until null terminator
         if (string[i] == ' ') {
             printf("/ "); // Use "/" to represent a space between words for now
         } else {
-            const char *code = encode_char(string[i]);
+            const char *code = encode_char(string[i]); // Get the Morse code for the character
             if (code != NULL) {
-                printf("%s ", code);
+                printf("%s ", code); // Print the Morse code followed by a space
             } else {
-                printf("? ");
+                printf("? "); // If character is not found, print "?"
             }
         }
     }
@@ -545,16 +533,16 @@ static void encode_string(const char *string) {
 }
 
 // decode code to string
-static void decode_string(char *morse) {
-    char *saveptr;
-    char *token = strtok_r(morse, " ", &saveptr);
+static void decode_string(char *morse) { // Modifies the input string to tokenize it
+    char *saveptr; // For strtok_r to keep track of the next token
+    char *token = strtok_r(morse, " ", &saveptr); // Tokenize the Morse code string by spaces
     while (token != NULL) {
-        if (strcmp(token, "/") == 0) {
+        if (strcmp(token, "/") == 0) { // If token is "/", print a space to represent a word separation
             putchar(' ');
         } else {
-            putchar(decode_symbol(token));
+            putchar(decode_symbol(token)); // Decode the Morse code and print the character
         }
-        token = strtok_r(NULL, " ", &saveptr);
+        token = strtok_r(NULL, " ", &saveptr); // Get the next token
     }
     printf("\n");
 }
