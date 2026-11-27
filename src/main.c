@@ -85,6 +85,7 @@ static void btn_fxn(uint gpio, uint32_t eventMask) {
 
 //Do the sensor task
 static void sensor_task(void *pvParameters){
+    vTaskDelay(pdMS_TO_TICKS(1000));
     
     (void)pvParameters;
 
@@ -93,6 +94,7 @@ static void sensor_task(void *pvParameters){
 
     
     //Initialize the IMU sensor
+    vTaskDelay(pdMS_TO_TICKS(1000));
     if (init_ICM42670() == 0) {
         printf("ICM-42670P initialized successfully!\n");
         if (ICM42670_start_with_default_values() != 0){
@@ -110,11 +112,12 @@ static void sensor_task(void *pvParameters){
     while(1){
         if ((sensor == 1) && (programState == READING_DATA)) {
             if (ICM42670_read_sensor_data(&ax, &ay, &az, &gx, &gy, &gz, &t) == 0) {
-                //printf("Accel: X=%f, Y=%f, Z=%f | Gyro: X=%f, Y=%f, Z=%f| Temp: %2.2f°C\n", ax, ay, az, gx, gy, gz, t);
+                printf("Accel: X=%f, Y=%f, Z=%f | Gyro: X=%f, Y=%f, Z=%f| Temp: %2.2f°C\n", ax, ay, az, gx, gy, gz, t);
 
                 //Check if the Pico is still rotating using gyros absolute values
                 //This check continues as long as the Pico is rotating and then continues to check the position
                 if ((fabsf(gx) <= gyro_threshold) && (fabsf(gy) <= gyro_threshold) && (fabsf(gz) <= gyro_threshold)) {
+                //if (1 == 1) {
 
                 
 
@@ -205,11 +208,13 @@ static void light_sensor_task(void *arg){
                 }
                 cover = 0; // Reset the cover count if the sensor is not covered
             }
-            vTaskDelay(pdMS_TO_TICKS(100));
+        } else {
+            cover = 0; // Reset the cover count if the sensor is not selected or in menu
         }
-    vTaskDelay(pdMS_TO_TICKS(100));
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
+
 
 
 
@@ -375,13 +380,15 @@ typedef struct {
     uint32_t duration; // ms
 } note_t;
 
+// Melody
 static const note_t melody[] = {
-    {554, 500}, {523, 500}, {466, 500},
+    {554, 500}, 
+    /*{523, 500}, {466, 500},
     {523, 1500}, {415, 500},
     {415, 500}, {466, 1200}, {0, 50}, {415, 200}, {0, 50},
-    {415, 2500},
+    {415, 2500},*/
 };
-
+// Play melody
 static void play_melody(const note_t *melody, int count) {
     for (int i = 0; i < count; i++) {
         if (melody[i].frequency == 0) {
@@ -468,6 +475,7 @@ static void menu_task(void *arg) {
 
             previous_sensor = 0;   // Reset so if the menu is accessed again, it shows correctly
         }
+        vTaskDelay(pdMS_TO_TICKS(50));
     }    
 }
 
@@ -549,11 +557,29 @@ static void decode_string(char *morse) { // Modifies the input string to tokeniz
 }
 
 // Helper function to get a line of input from the user
-// Waits until Enter is pressed, which might be a problem at some point
 static bool get_line(char *buf, size_t size) {
-    if (fgets(buf, size, stdin) == NULL) return false;
-    buf[strcspn(buf, "\r\n")] = '\0';   // overwrite newline with null terminator
-    return buf[0] != '\0';              // return false if the line is empty
+    static size_t len = 0;
+
+    for (;;) {
+        if (programState != TRANSLATOR) { len = 0; return false; }
+
+        int c = getchar_timeout_us(0);
+        if (c == PICO_ERROR_TIMEOUT) {
+            vTaskDelay(pdMS_TO_TICKS(10));   // yields, so it doesn't starve anything
+            continue;
+        }
+        if (c == '\r' || c == '\n') {
+            if (len == 0) continue;          // ignore empty lines
+            buf[len] = '\0';
+            len = 0;
+            return true;
+        }
+        if (c == 0x08 || c == 0x7F) {        // backspace
+            if (len > 0) len--;
+            continue;
+        }
+        if (len < size - 1) buf[len++] = (char)c;
+    }
 }
 
 // Helper to clear inputbuffer, so no leftover characters are read
